@@ -1,23 +1,21 @@
 <script>
 import StatusFilter from './components/StatusFilter.vue'
 import TodoItem from '@/components/TodoItem.vue';
+import { createTodos, deleteTodo, getTodos, updateTodo } from '@/api/todos';
+import ErrorMessage from '@/components/ErrorMessage.vue';
 export default {
   components: {
+    ErrorMessage,
     TodoItem,
-    StatusFilter
+    StatusFilter,
+
   },
   data() {
-    let todos = [];
-    const jsonData = localStorage.getItem('todos') || '[]';
-
-    try {
-      todos = JSON.parse(jsonData)
-    } catch (e) {}
-
     return {
-      todos,
+      todos: [],
       title: '',
-      status: 'all'
+      status: 'all',
+      errorMessage: '',
     }
   },
   computed: {
@@ -38,23 +36,34 @@ export default {
       }
     }
   },
-  watch: {
-    todos: {
-      deep: true,
-      handler: function () {
-        localStorage.setItem('todos', JSON.stringify(this.todos));
-      }
-    }
+  mounted() {
+    getTodos()
+      .then(({ data }) => {
+        this.todos = data;
+      })
+      .catch(() => {
+        this.$refs.errorMessage.show('Unable to add todos');
+      })
   },
   methods: {
     handleSubmit() {
-      this.todos.push({
-        id: Date.now(),
-        title: this.title,
-        completed: false
+      createTodos(this.title).then(({ data }) => {
+        this.todos.push(data)
       })
 
       this.title = ''
+    },
+    updateTodo({ id, title, completed }) {
+      updateTodo({ id, title, completed })
+        .then(({ data }) =>
+          this.todos = this.todos
+            .map(todo => data.id === todo.id ? data : todo)
+        )
+    },
+    deleteTod(id) {
+      deleteTodo(id).then(() =>
+        this.todos = this.todos.filter(todo => todo.id !== id)
+      )
     },
     clearCompleted() {
       this.todos = this.todos.filter(todo => !todo.completed)
@@ -90,8 +99,8 @@ export default {
           v-for="todo of visibleTodos"
           :key="todo.id"
           :todo="todo"
-          @update="Object.assign(todo, $event)"
-          @delete="todos.splice(todos.indexOf(todo), 1)"
+          @update="updateTodo"
+          @delete="deleteTod(todo.id)"
         />
       </TransitionGroup>
 
@@ -112,16 +121,19 @@ export default {
       </footer>
     </div>
 
-    <article class="message is-danger message--hidden">
-      <div class="message-header">
-        <p>Error</p>
-        <button class="delete"></button>
-      </div>
+    <ErrorMessage
+      class="is-warning"
+      :active="!errorMessage"
+      ref="errorMessage"
+    >
+      <template #default="{ text }">
+        <p>{{ text }}</p>
+      </template>
 
-      <div class="message-body">
-        Unable to add a Todo
-      </div>
-    </article>
+      <template #header>
+        <p>Server Error</p>
+      </template>
+    </ErrorMessage>
   </div>
 </template>
 
